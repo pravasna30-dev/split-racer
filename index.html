@@ -423,11 +423,10 @@ function snapRampsToCenter(track) {
   }
 }
 
-// Make the field of tracks varied: flip the two landscape circuits to portrait
-// so we get a genuine mix of vertical and horizontal splits.
-rotateTrack(TRACKS[0], Math.PI / 2); // OVAL    -> vertical
-rotateTrack(TRACKS[2], Math.PI / 2); // FIGURE-8 -> vertical
-TRACKS.forEach(t => { computeBBox(t); t.layout = pickLayout(t); snapRampsToCenter(t); });
+// NOTE: the actual post-processing (rotate/bbox/layout/snap) runs after the
+// MATH section, because snapRampsToCenter -> trackNearest depends on V2, which
+// is a `const` and can't be touched before its initialization (temporal dead
+// zone). Running it here would crash the whole script at load.
 
 // =====================================================
 //  MATH
@@ -458,6 +457,14 @@ function trackNearest(track, x, y) {
   }
   return {idx, dc:best};
 }
+
+// ---- TRACK POST-PROCESSING (runs now that V2/trackNearest are ready) ----
+// Flip the two landscape circuits to portrait so we get a genuine mix of
+// vertical and horizontal splits, then compute bounds, choose a layout, and
+// snap ramps onto the centerline.
+rotateTrack(TRACKS[0], Math.PI / 2); // OVAL    -> vertical
+rotateTrack(TRACKS[2], Math.PI / 2); // FIGURE-8 -> vertical
+TRACKS.forEach(t => { computeBBox(t); t.layout = pickLayout(t); snapRampsToCenter(t); });
 
 // =====================================================
 //  PARTICLES
