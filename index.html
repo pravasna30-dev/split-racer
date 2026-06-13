@@ -68,6 +68,15 @@ kbd{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);bo
 .res-t span{font-size:1.5rem;}
 .res-t small{display:block;font-size:0.65rem;color:#666;margin-top:4px;}
 .res-actions{display:flex;gap:16px;justify-content:center;margin-top:24px;}
+/* pause overlay */
+#pauseOverlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:35;pointer-events:none;}
+#pauseOverlay.show{display:flex;}
+.pause-panel{background:rgba(4,4,18,0.9);border:2px solid rgba(255,255,100,0.3);border-radius:16px;
+  padding:36px 70px;text-align:center;box-shadow:0 0 60px rgba(0,0,0,0.8);}
+.pause-panel h2{color:#ff4;font-size:2.4rem;letter-spacing:6px;margin-bottom:12px;}
+.pause-panel p{color:#777;font-size:0.78rem;letter-spacing:2px;line-height:2;}
+/* leader badge */
+.leader-none{}
 </style>
 </head>
 <body>
@@ -91,6 +100,11 @@ kbd{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);bo
            <kbd>←</kbd> / <kbd>→</kbd> Steer<br>
            <kbd>ENTER</kbd> Nitro Boost</p>
       </div>
+      <div class="ctrl-box">
+        <h3 style="color:#aaa;">GAME CONTROLS</h3>
+        <p><kbd>P</kbd> Pause / Resume<br>
+           <kbd>Q</kbd> Quit to Menu</p>
+      </div>
     </div>
     <button class="btn" onclick="gotoVS()">SELECT VEHICLES ▶</button>
   </div>
@@ -111,6 +125,12 @@ kbd{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);bo
 </div>
 
 <div id="cd"><div id="cdnum">3</div></div>
+<div id="pauseOverlay">
+  <div class="pause-panel">
+    <h2>⏸ PAUSED</h2>
+    <p><kbd>P</kbd> &nbsp; Resume<br><kbd>Q</kbd> &nbsp; Quit to Menu</p>
+  </div>
+</div>
 <div id="results">
   <div class="res-panel">
     <h2 id="resTitle">RACE OVER</h2>
@@ -391,8 +411,31 @@ function mkPlayer(vk, idx) {
 //  INPUT
 // =====================================================
 const K = {};
-addEventListener('keydown', e=>{ K[e.code]=true; if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault(); });
-addEventListener('keyup',   e=>{ K[e.code]=false; });
+let paused = false;
+
+function togglePause() {
+  if (phase !== 'racing') return;
+  paused = !paused;
+  const po = document.getElementById('pauseOverlay');
+  if (paused) { po.classList.add('show'); Sfx.stopMusic(); }
+  else        { po.classList.remove('show'); Sfx.startMusic(); }
+}
+
+function quitToMenu() {
+  if (phase !== 'racing' && phase !== 'countdown') return;
+  paused = false;
+  document.getElementById('pauseOverlay').classList.remove('show');
+  Sfx.stopMusic();
+  gotoTitle();
+}
+
+addEventListener('keydown', e => {
+  K[e.code] = true;
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
+  if (e.code === 'KeyP') togglePause();
+  if (e.code === 'KeyQ') quitToMenu();
+});
+addEventListener('keyup', e => { K[e.code] = false; });
 
 function getInp(idx) {
   return idx===0
@@ -731,23 +774,30 @@ function drawVehicle(ctx, p, ox, hw, camX, camY) {
   });
 }
 
-function drawHUD(ctx, p, ox, hw, track) {
+// Compute race progress score (higher = further ahead)
+function raceProgress(p, track) {
+  const tn = trackNearest(track, p.x, p.y);
+  return p.lap * track.pts.length + tn.idx;
+}
+
+function drawHUD(ctx, p, ox, hw, track, leaderIdx) {
   ctx.save(); ctx.translate(ox,0);
 
   // Top bar bg
-  ctx.fillStyle='rgba(0,0,0,0.5)';
-  ctx.fillRect(0,0,hw,72);
+  ctx.fillStyle='rgba(0,0,0,0.55)';
+  ctx.fillRect(0,0,hw,76);
 
   // Player label
-  ctx.fillStyle=p.idx===0?'#4ff':'#f84';
+  const pCol = p.idx===0 ? '#4ff' : '#f84';
+  ctx.fillStyle = pCol;
   ctx.font='bold 14px Courier New';
   ctx.textAlign='left';
   ctx.fillText('P'+(p.idx+1)+'  '+p.v.label, 10, 22);
 
-  // Speed
-  const spd=Math.abs(Math.round(p.speed));
-  ctx.fillStyle='#eee'; ctx.font='bold 26px Courier New';
-  ctx.fillText(spd+' km/h', 10, 52);
+  // Speed in mph
+  const mph = Math.abs(Math.round(p.speed * 0.621371));
+  ctx.fillStyle='#eee'; ctx.font='bold 28px Courier New';
+  ctx.fillText(mph+' mph', 10, 55);
 
   // Lap / CP (right side)
   ctx.textAlign='right'; ctx.fillStyle='#aaa'; ctx.font='13px Courier New';
@@ -756,20 +806,48 @@ function drawHUD(ctx, p, ox, hw, track) {
   ctx.fillStyle='#666'; ctx.font='11px Courier New';
   ctx.fillText(`CP ${p.cpdone.length}/${track.cps.length}`, hw-10, 38);
 
+  // ---- LEADER BADGE ----
+  const isLeading = leaderIdx === p.idx;
+  if (!p.done) {
+    const badgeX = hw/2, badgeY = 90;
+    if (isLeading) {
+      // Glowing LEADING badge
+      const grd = ctx.createRadialGradient(badgeX,badgeY,2,badgeX,badgeY,55);
+      grd.addColorStop(0,'rgba(255,220,0,0.22)');
+      grd.addColorStop(1,'rgba(255,220,0,0)');
+      ctx.fillStyle=grd; ctx.fillRect(badgeX-60,badgeY-20,120,28); // glow bg
+
+      ctx.fillStyle='rgba(0,0,0,0.55)';
+      ctx.beginPath(); ctx.roundRect(badgeX-58,badgeY-18,116,24,6); ctx.fill();
+      ctx.strokeStyle='#ffd700'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.roundRect(badgeX-58,badgeY-18,116,24,6); ctx.stroke();
+      ctx.fillStyle='#ffd700'; ctx.font='bold 13px Courier New'; ctx.textAlign='center';
+      ctx.fillText('👑  LEADING', badgeX, badgeY-1);
+    } else {
+      // BEHIND badge
+      ctx.fillStyle='rgba(0,0,0,0.45)';
+      ctx.beginPath(); ctx.roundRect(badgeX-52,badgeY-18,104,24,6); ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.roundRect(badgeX-52,badgeY-18,104,24,6); ctx.stroke();
+      ctx.fillStyle='#888'; ctx.font='bold 12px Courier New'; ctx.textAlign='center';
+      ctx.fillText('▼  BEHIND', badgeX, badgeY-1);
+    }
+  }
+
   // Nitro bar
-  ctx.textAlign='left'; ctx.fillStyle='#444';
-  ctx.fillRect(10,58,hw-20,8);
+  ctx.textAlign='left'; ctx.fillStyle='#333';
+  ctx.fillRect(10,62,hw-20,8);
   const nc = p.nitro>60?'#0cf':p.nitro>30?'#fa0':'#f40';
   ctx.fillStyle=nc;
-  ctx.fillRect(10,58,(hw-20)*p.nitro/100,8);
+  ctx.fillRect(10,62,(hw-20)*p.nitro/100,8);
   ctx.fillStyle='#666'; ctx.font='9px Courier New';
-  ctx.fillText('NITRO', 10, 57);
-  if(p.nitro>=99) { ctx.fillStyle='#0ff'; ctx.font='bold 9px Courier New'; ctx.textAlign='right'; ctx.fillText('FULL!', hw-12, 57); ctx.textAlign='left'; }
+  ctx.fillText('NITRO', 10, 61);
+  if(p.nitro>=99) { ctx.fillStyle='#0ff'; ctx.font='bold 9px Courier New'; ctx.textAlign='right'; ctx.fillText('FULL!', hw-12, 61); ctx.textAlign='left'; }
 
   // Air time indicator
   if(p.air){
-    ctx.fillStyle='rgba(255,255,0,0.85)'; ctx.font='bold 18px Courier New'; ctx.textAlign='center';
-    ctx.fillText('✈ AIR TIME!', hw/2, 96);
+    ctx.fillStyle='rgba(255,255,0,0.88)'; ctx.font='bold 18px Courier New'; ctx.textAlign='center';
+    ctx.fillText('✈ AIR TIME!', hw/2, 115);
   }
   // Oil skid
   if(p.oilT>0){
@@ -783,7 +861,7 @@ function drawHUD(ctx, p, ox, hw, track) {
     ctx.fillStyle='#f80'; ctx.font='bold 13px Courier New'; ctx.textAlign='center';
     ctx.fillText('OFF ROAD', hw/2, H-12);
   }
-  // Spin
+  // Spin / crash flash
   if(p.spin>0){
     ctx.fillStyle='rgba(255,100,0,0.15)'; ctx.fillRect(0,0,hw,H);
   }
@@ -798,6 +876,7 @@ let phase = 'title'; // title | vs | countdown | racing | results
 let lvl = 0;
 let players = [], p1vk = null, p2vk = null;
 let lastT = 0, resultShown = false;
+let leaderIdx = 0; // which player index is currently leading
 
 // =====================================================
 //  MENUS
@@ -841,6 +920,8 @@ function buildCards(containerId, pIdx){
 function beginRace(){ lvl=0; launchLevel(); }
 
 function launchLevel(){
+  paused = false;
+  document.getElementById('pauseOverlay').classList.remove('show');
   showOnly(null); $('results').classList.remove('show');
   phase='countdown'; resultShown=false;
   const track=TRACKS[lvl];
@@ -915,9 +996,13 @@ function loop(ts){
     const track=TRACKS[lvl];
     const hw=W/2;
 
-    if(phase==='racing'){
+    if(phase==='racing' && !paused){
       tickParts(dt);
       players.forEach(p=>tickPlayer(p,track,dt));
+      // Compute who is leading
+      const prog0 = raceProgress(players[0], track);
+      const prog1 = raceProgress(players[1], track);
+      leaderIdx = prog0 >= prog1 ? 0 : 1;
       if(!resultShown && players.some(p=>p.done)) showResults();
     }
 
@@ -931,7 +1016,13 @@ function loop(ts){
       drawVehicle(ctx, players[1-pi], ox, hw, cam.x, cam.y);
       // Draw this player
       drawVehicle(ctx, p, ox, hw, cam.x, cam.y);
-      drawHUD(ctx, p, ox, hw, track);
+      drawHUD(ctx, p, ox, hw, track, leaderIdx);
+    }
+
+    // Pause dim overlay on canvas
+    if(paused){
+      ctx.fillStyle='rgba(0,0,0,0.45)';
+      ctx.fillRect(0,0,W,H);
     }
 
     // Center divider
@@ -945,7 +1036,8 @@ function loop(ts){
     // Bottom info bar
     ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(0,H-22,W,22);
     ctx.fillStyle='rgba(255,255,255,0.3)'; ctx.font='11px Courier New'; ctx.textAlign='center';
-    ctx.fillText(`${track.name}  |  Level ${lvl+1}/${TRACKS.length}  |  ${track.laps} Laps`, W/2, H-7);
+    const pauseHint = paused ? '  ·  P = Resume  ·  Q = Quit' : '  ·  P = Pause  ·  Q = Quit';
+    ctx.fillText(`${track.name}  |  Level ${lvl+1}/${TRACKS.length}  |  ${track.laps} Laps${pauseHint}`, W/2, H-7);
   } else if(phase==='title'||phase==='vs'){
     // Animated background
     const t=ts/1000;
