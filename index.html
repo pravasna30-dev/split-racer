@@ -89,7 +89,7 @@ kbd{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);bo
   <div class="screen active" id="scTitle">
     <h1>SPLIT RACER</h1>
     <div class="tagline">2 PLAYER LOCAL RACING</div>
-    <div class="subtitle">3 TRACKS · NITRO BOOST · RAMPS · OBSTACLES</div>
+    <div class="subtitle">10 TRACKS · NITRO BOOST · RAMPS · CAR-TO-CAR CONTACT</div>
     <div class="controls-hint">
       <div class="ctrl-box">
         <h3 class="p1h">PLAYER 1  (LEFT)</h3>
@@ -155,7 +155,7 @@ kbd{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);bo
 // =====================================================
 // Bump this on every meaningful change. Major = big gameplay/visual overhaul,
 // minor = new feature, patch = tweak/fix. Shown bottom-right + on the title.
-const VERSION = '2.0.0';
+const VERSION = '3.0.0';
 const canvas = document.getElementById('c');
 const ctx    = canvas.getContext('2d');
 let W = 0, H = 0;
@@ -197,6 +197,7 @@ const Sfx = {
   lap()        { [0,.14,.28].forEach((d,i) => setTimeout(()=>this.play({f0:[523,659,784][i],type:'square',vol:.2,dur:.18}), d*1000)); },
   crash()      { this.noise(.25,.15); this.play({f0:280,f1:60,type:'sawtooth',vol:.18,dur:.25}); },
   coneHit()    { this.noise(.04,.08); this.play({f0:220,f1:80,type:'sawtooth',vol:.05,dur:.14}); },
+  bump()       { this.noise(.10,.07); this.play({f0:160,f1:70,type:'square',vol:.08,dur:.12}); },
   toggleMute() {
     this.muted = !this.muted;
     if (this.muted) { this.stopMusic(); }
@@ -272,119 +273,99 @@ const VDEFS = {
 // =====================================================
 //  TRACKS
 // =====================================================
-function oval() {
-  const pts=[], n=120, rx=680, ry=310;
-  for(let i=0;i<n;i++){
-    const a=(i/n)*Math.PI*2-Math.PI/2;
-    pts.push({x:rx*Math.cos(a), y:ry*Math.sin(a)});
-  }
-  return {
-    name:'OVAL CIRCUIT', id:0, laps:3, tw:105,
-    startPos:{x:0,y:-310}, startAngle:0, pts,
-    cps:[15,40,65,90,110],
-    obs:[
-      {t:'cone',x:300,y:-200},{t:'cone',x:-300,y:200},
-      {t:'cone',x:500,y:80},{t:'cone',x:-500,y:-80},
-      {t:'cone',x:200,y:270},{t:'cone',x:-200,y:-270},
-      {t:'oil',x:120,y:290},{t:'oil',x:-120,y:-290},
-      {t:'oil',x:600,y:0},{t:'oil',x:-600,y:0},
-    ],
-    ramps:[
-      {x:580,y:-80,a:Math.PI*1.5},
-      {x:-580,y:80,a:Math.PI*.5},
-    ],
-    nitros:[{x:0,y:-310},{x:0,y:310},{x:620,y:0},{x:-620,y:0}],
-    bg:'#1a2a18', grass:'#1d3a1a', road:'#282828', curb:'#cc2222', line:'#444'
-  };
-}
-
-function city() {
+// ---- SHAPE GENERATORS ----
+// Each returns a closed loop of centerline points (centered on the origin),
+// traced in one consistent direction. Difficulty knobs and hazard placement are
+// layered on top by buildTrack(), so authoring a new track is one row in
+// TRACK_PLAN below — not a hand-placed coordinate list.
+function shapeOval(rx, ry, n=140){
   const pts=[];
-  // Rounded rectangle track
-  const segs=[
-    {fx:550,fy:-300,tx:550,ty:300,n:40},
-    {fx:550,fy:300,tx:-550,ty:300,n:50},
-    {fx:-550,fy:300,tx:-550,ty:-300,n:40},
-    {fx:-550,fy:-300,tx:550,ty:-300,n:50},
-  ];
-  segs.forEach(s=>{
-    for(let j=0;j<s.n;j++){
-      const t=j/s.n;
-      pts.push({x:s.fx+(s.tx-s.fx)*t, y:s.fy+(s.ty-s.fy)*t});
-    }
-  });
-  return {
-    name:'CITY CIRCUIT', id:1, laps:3, tw:112,
-    startPos:{x:550,y:0}, startAngle:Math.PI/2, pts,
-    cps:[20,60,100,140],
-    obs:[
-      {t:'cone',x:280,y:-300},{t:'cone',x:-280,y:-300},
-      {t:'cone',x:280,y:300},{t:'cone',x:-280,y:300},
-      {t:'cone',x:550,y:-120},{t:'cone',x:550,y:120},
-      {t:'cone',x:-550,y:-120},{t:'cone',x:-550,y:120},
-      {t:'oil',x:0,y:-300},{t:'oil',x:0,y:300},
-      {t:'oil',x:550,y:0},{t:'oil',x:-550,y:0},
-    ],
-    ramps:[
-      {x:-550,y:0,a:Math.PI*1.5},
-      {x:0,y:300,a:Math.PI},
-    ],
-    nitros:[{x:0,y:-300},{x:550,y:0},{x:0,y:300},{x:-550,y:0}],
-    bg:'#181828', grass:'#222235', road:'#242424', curb:'#2255bb', line:'#554'
-  };
+  for(let i=0;i<n;i++){ const a=(i/n)*Math.PI*2-Math.PI/2; pts.push({x:rx*Math.cos(a), y:ry*Math.sin(a)}); }
+  return pts;
 }
-
-function figure8() {
-  const pts=[], n=200, sc=580;
-  for(let i=0;i<n;i++){
-    const a=(i/n)*Math.PI*2;
-    // lemniscate
-    const d=1+Math.sin(a)*Math.sin(a);
-    pts.push({x:sc*Math.cos(a)/d, y:sc*1.1*Math.sin(a)*Math.cos(a)/d});
+function shapeRoundRect(hw, hh, n=160){
+  const pts=[], corners=[{x:hw,y:-hh},{x:hw,y:hh},{x:-hw,y:hh},{x:-hw,y:-hh}], seg=n/4;
+  for(let c=0;c<4;c++){
+    const a=corners[c], b=corners[(c+1)%4];
+    for(let j=0;j<seg;j++){ const t=j/seg; pts.push({x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t}); }
   }
-  return {
-    name:'FIGURE-8 MADNESS', id:2, laps:5, tw:118,
-    startPos:{x:0,y:-180}, startAngle:Math.PI/2, pts,
-    cps:[25,75,125,175],
-    obs:[
-      {t:'cone',x:320,y:10},{t:'cone',x:-320,y:-10},
-      {t:'cone',x:0,y:190},{t:'cone',x:0,y:-190},
-      {t:'cone',x:480,y:80},{t:'cone',x:-480,y:-80},
-      {t:'oil',x:160,y:90},{t:'oil',x:-160,y:-90},
-      {t:'oil',x:380,y:-60},{t:'oil',x:-380,y:60},
-    ],
-    ramps:[
-      {x:420,y:0,a:0},
-      {x:-420,y:0,a:Math.PI},
-      {x:0,y:280,a:Math.PI/2},
-    ],
-    nitros:[{x:500,y:0},{x:-500,y:0},{x:0,y:340},{x:0,y:-340}],
-    bg:'#2a1a18', grass:'#381e14', road:'#242020', curb:'#cc5522', line:'#664'
-  };
+  return pts; // corners get visually rounded by the road's width
+}
+function shapeFigure8(sc, n=200){
+  const pts=[];
+  for(let i=0;i<n;i++){ const a=(i/n)*Math.PI*2, d=1+Math.sin(a)*Math.sin(a);
+    pts.push({x:sc*Math.cos(a)/d, y:sc*1.1*Math.sin(a)*Math.cos(a)/d}); }
+  return pts; // lemniscate (self-crossing)
+}
+function shapeWavy(r, lobes, amp, n=180){
+  // A circle whose radius wobbles -> sweeping S-curves. More lobes = twistier.
+  const pts=[];
+  for(let i=0;i<n;i++){ const a=(i/n)*Math.PI*2-Math.PI/2, rr=r+amp*Math.sin(a*lobes);
+    pts.push({x:rr*Math.cos(a), y:rr*0.82*Math.sin(a)}); }
+  return pts;
 }
 
-const TRACKS = [oval(), city(), figure8()];
+// Evenly spaced point indices around the loop, skipping the ~14% around the
+// start/finish line so hazards never sit right on the line. Each feature type
+// passes a different fractional `offset` so oil/ramps/nitro don't all stack up.
+function spreadIndices(n, count, offset){
+  const out=[], span=n*0.86;
+  for(let i=0;i<count;i++) out.push(Math.floor(n*0.07 + span*((i+offset)/Math.max(1,count)))%n);
+  return out;
+}
 
-// =====================================================
-//  TRACK ORIENTATION + LAYOUT
-// =====================================================
-// Rotate every point + feature of a track around the origin. Used to flip a
-// naturally-wide (landscape) track into a vertical (portrait) one so it fills
-// a tall split-screen column instead of needing the camera to pan sideways.
-function rotateTrack(track, ang) {
-  const c = Math.cos(ang), s = Math.sin(ang);
-  const rot = p => ({ ...p, x: p.x * c - p.y * s, y: p.x * s + p.y * c });
-  track.pts     = track.pts.map(rot);
-  track.obs     = track.obs.map(rot);
-  track.nitros  = track.nitros.map(rot);
-  track.ramps   = track.ramps.map(r => ({ ...rot(r), a: r.a + ang }));
-  track.startPos = rot(track.startPos);
-  track.startAngle += ang;
+// Color themes, cycled across tracks so the 10 levels stay visually distinct.
+const THEMES=[
+  {bg:'#1a2a18', grass:'#1d3a1a', road:'#282828', curb:'#cc2222', line:'#444'},
+  {bg:'#181828', grass:'#222235', road:'#242424', curb:'#2255bb', line:'#554'},
+  {bg:'#2a1a18', grass:'#381e14', road:'#242020', curb:'#cc5522', line:'#664'},
+  {bg:'#101f24', grass:'#15333a', road:'#202828', curb:'#22bbaa', line:'#465'},
+  {bg:'#221426', grass:'#301a38', road:'#262026', curb:'#aa33cc', line:'#646'},
+];
+
+// Assemble a full track from a plan row: shape + difficulty knobs. Checkpoints
+// and all features are placed by track-point index so they always land on the
+// centerline, whatever the shape.
+function buildTrack(cfg, id){
+  const pts=cfg.shape(), n=pts.length, theme=THEMES[id%THEMES.length];
+  const at=i=>({x:pts[i].x, y:pts[i].y});
+  const track={
+    name:cfg.name, id, laps:cfg.laps, tw:cfg.tw, pts,
+    startPos:at(0), startAngle:Math.atan2(pts[1].y-pts[0].y, pts[1].x-pts[0].x),
+    cps:[0.22,0.44,0.66,0.88].map(f=>Math.floor(n*f)),
+    obs:[], ramps:[], nitros:[], ...theme
+  };
+  spreadIndices(n, cfg.oil, 0.0).forEach(i=>track.obs.push({t:'oil', ...at(i)}));
+  spreadIndices(n, cfg.ramps, 0.5).forEach(i=>{
+    const nx=pts[(i+1)%n];
+    track.ramps.push({x:pts[i].x, y:pts[i].y, a:Math.atan2(nx.y-pts[i].y, nx.x-pts[i].x)});
+  });
+  spreadIndices(n, cfg.nitros, 0.25).forEach(i=>track.nitros.push({...at(i), active:true, respawnAt:0}));
   return track;
 }
 
+// ---- 10 TRACKS, EASY -> BRUTAL ----
+// As you descend: road narrows (tw), laps rise, oil multiplies, ramps & shapes
+// get twistier, and free nitro pads get scarcer.
+const TRACK_PLAN=[
+  {name:'ROOKIE OVAL',     shape:()=>shapeOval(680,360),      tw:120, laps:2, oil:1, ramps:1, nitros:4},
+  {name:'CITY SPRINT',     shape:()=>shapeRoundRect(620,360), tw:112, laps:2, oil:2, ramps:1, nitros:4},
+  {name:'SUNSET BEND',     shape:()=>shapeWavy(560,2,90),     tw:108, laps:3, oil:2, ramps:2, nitros:4},
+  {name:'FIGURE-8',        shape:()=>shapeFigure8(560),       tw:104, laps:3, oil:3, ramps:2, nitros:3},
+  {name:'TWIN APEX',       shape:()=>shapeWavy(580,3,80),     tw:98,  laps:3, oil:3, ramps:3, nitros:3},
+  {name:'DOWNTOWN GRID',   shape:()=>shapeRoundRect(660,300), tw:92,  laps:4, oil:4, ramps:3, nitros:3},
+  {name:'SERPENTINE',      shape:()=>shapeWavy(600,4,90),     tw:86,  laps:4, oil:5, ramps:3, nitros:3},
+  {name:'CROSSOVER CHAOS', shape:()=>shapeFigure8(620),       tw:82,  laps:4, oil:6, ramps:4, nitros:2},
+  {name:'NEEDLE CIRCUIT',  shape:()=>shapeOval(740,290),      tw:74,  laps:5, oil:7, ramps:4, nitros:2},
+  {name:'THE GAUNTLET',    shape:()=>shapeWavy(620,5,100),    tw:70,  laps:5, oil:8, ramps:5, nitros:2},
+];
+const TRACKS = TRACK_PLAN.map(buildTrack);
+
+// =====================================================
+//  TRACK LAYOUT
+// =====================================================
 // Pre-compute a padded bounding box so we know the track's footprint and can
-// scale it to fit a viewport. tw is the road half-width; pad leaves a margin
+// scale it to fit the viewport. tw is the road half-width; pad leaves a margin
 // so curbs/obstacles near the edge aren't clipped.
 function computeBBox(track) {
   let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
@@ -400,33 +381,6 @@ function computeBBox(track) {
     w: maxx - minx, h: maxy - miny
   };
 }
-
-// ---- LAYOUT DECISION (your design knob — see note below) ----
-// Returns 'lr' (left/right columns) or 'tb' (top/bottom rows) for a track.
-// Default heuristic: match the SPLIT shape to the track shape. A tall track
-// reads best in tall columns; a wide track reads best in wide rows.
-function pickLayout(track) {
-  const { w, h } = track.bbox;
-  return h >= w ? 'lr' : 'tb';
-}
-
-// Pull every ramp onto the road's centerline and align it with the direction
-// of travel, so a bump is never sitting off in the grass — you always hit it
-// dead-center while driving the racing line.
-function snapRampsToCenter(track) {
-  const n = track.pts.length;
-  for (const r of track.ramps) {
-    const { idx } = trackNearest(track, r.x, r.y);
-    const cur = track.pts[idx], nxt = track.pts[(idx + 1) % n];
-    r.x = cur.x; r.y = cur.y;
-    r.a = Math.atan2(nxt.y - cur.y, nxt.x - cur.x); // along the road
-  }
-}
-
-// NOTE: the actual post-processing (rotate/bbox/layout/snap) runs after the
-// MATH section, because snapRampsToCenter -> trackNearest depends on V2, which
-// is a `const` and can't be touched before its initialization (temporal dead
-// zone). Running it here would crash the whole script at load.
 
 // =====================================================
 //  MATH
@@ -458,13 +412,9 @@ function trackNearest(track, x, y) {
   return {idx, dc:best};
 }
 
-// ---- TRACK POST-PROCESSING (runs now that V2/trackNearest are ready) ----
-// Flip the two landscape circuits to portrait so we get a genuine mix of
-// vertical and horizontal splits, then compute bounds, choose a layout, and
-// snap ramps onto the centerline.
-rotateTrack(TRACKS[0], Math.PI / 2); // OVAL    -> vertical
-rotateTrack(TRACKS[2], Math.PI / 2); // FIGURE-8 -> vertical
-TRACKS.forEach(t => { computeBBox(t); t.layout = pickLayout(t); snapRampsToCenter(t); });
+// Compute each track's bounding box so the single full-screen view can scale it
+// to fit. (Features are already on the centerline, so no snapping is needed.)
+TRACKS.forEach(computeBBox);
 
 // =====================================================
 //  PARTICLES
@@ -580,9 +530,12 @@ function tickPlayer(p, track, dt) {
   if(!inp.acc && !inp.brk) p.speed *= offRoad ? 0.90 : 0.98;
   if(offRoad) p.speed *= 0.97;
 
-  // Move
-  p.x += Math.cos(p.angle)*p.speed*dt;
-  p.y += Math.sin(p.angle)*p.speed*dt;
+  // Move — forward motion along the heading PLUS any knockback velocity from a
+  // car-to-car hit (vx,vy), which bleeds away over a fraction of a second.
+  p.x += (Math.cos(p.angle)*p.speed + p.vx)*dt;
+  p.y += (Math.sin(p.angle)*p.speed + p.vy)*dt;
+  const kdamp = Math.max(0, 1 - 6*dt); // frame-rate independent decay (~0.9 @60fps)
+  p.vx *= kdamp; p.vy *= kdamp;
 
   // Jump / air
   if(p.air){
@@ -621,10 +574,9 @@ function tickPlayer(p, track, dt) {
     if(p.lap>=track.laps){ p.done=true; p.totalT=p.lapTimes.reduce((a,b)=>a+b,0); }
   }
 
-  // Obstacles
+  // Obstacles (oil slicks only — cones removed)
   for(const ob of track.obs){
     const od=V2.dist({x:p.x,y:p.y},ob);
-    if(ob.t==='cone'&&od<26){ p.speed*=0.5; p.spin=0.9; Sfx.coneHit(); spawnParts(p.x,p.y,'#f80',8,100,.5,6); }
     if(ob.t==='oil'&&od<38)  { p.oilT=1.6; spawnParts(p.x,p.y,'#4020a0',3,30,.6,4); }
   }
 
@@ -636,24 +588,68 @@ function tickPlayer(p, track, dt) {
     }
   }
 
-  // Nitro pads
+  // Nitro pads — consumed on contact, then respawn after a cooldown (handled in
+  // the game loop). An inactive pad gives nothing and isn't drawn.
   for(const nb of track.nitros){
-    if(V2.dist({x:p.x,y:p.y},nb)<32){
-      if(p.nitro<95){ p.nitro=Math.min(100,p.nitro+35); p.speed=Math.min(v.maxSpd*1.6,p.speed+70); Sfx.nitroPickup(); spawnParts(p.x,p.y,'#0fc',16,130,.6,9); }
+    if(nb.active && V2.dist({x:p.x,y:p.y},nb)<32){
+      p.nitro=Math.min(100,p.nitro+35); p.speed=Math.min(v.maxSpd*1.6,p.speed+70);
+      Sfx.nitroPickup(); spawnParts(p.x,p.y,'#0fc',16,130,.6,9);
+      nb.active=false; nb.respawnAt=performance.now()/1000 + NITRO_RESPAWN;
     }
   }
+}
+
+const NITRO_RESPAWN = 5; // seconds a nitro pad stays gone after being grabbed
+
+// Re-arm any nitro pad whose cooldown has elapsed (with a little pop of sparks).
+function tickNitros(track){
+  const now=performance.now()/1000;
+  for(const nb of track.nitros){
+    if(!nb.active && now>=nb.respawnAt){
+      nb.active=true;
+      spawnParts(nb.x,nb.y,'#0fc',10,90,.5,7);
+    }
+  }
+}
+
+// Detect and resolve a collision between the two cars: separate the overlap and
+// apply an impulse so they bounce apart. Heavier vehicles shove lighter ones.
+function resolveCarCollision(a, b){
+  if(a.done || b.done) return;
+  const dx=b.x-a.x, dy=b.y-a.y;
+  const d=Math.hypot(dx,dy)||0.0001;
+  const radA=(a.v.w+a.v.h)*0.30, radB=(b.v.w+b.v.h)*0.30;
+  const minD=radA+radB;
+  if(d>=minD) return;
+
+  const nx=dx/d, ny=dy/d;                 // collision normal, a -> b
+  const overlap=minD-d, totM=a.v.mass+b.v.mass;
+  // Push apart along the normal, each car moved inversely to its mass.
+  a.x -= nx*overlap*(b.v.mass/totM); a.y -= ny*overlap*(b.v.mass/totM);
+  b.x += nx*overlap*(a.v.mass/totM); b.y += ny*overlap*(a.v.mass/totM);
+
+  // Full velocity of each car = heading*speed + current knockback.
+  const avx=Math.cos(a.angle)*a.speed + a.vx, avy=Math.sin(a.angle)*a.speed + a.vy;
+  const bvx=Math.cos(b.angle)*b.speed + b.vx, bvy=Math.sin(b.angle)*b.speed + b.vy;
+  const vn=(bvx-avx)*nx + (bvy-avy)*ny;   // relative speed along the normal
+  if(vn>=0) return;                        // already separating — no impulse
+
+  const e=0.65;                            // restitution (bounciness)
+  const j=-(1+e)*vn / (1/a.v.mass + 1/b.v.mass);
+  const ix=j*nx, iy=j*ny;
+  a.vx -= ix/a.v.mass; a.vy -= iy/a.v.mass;
+  b.vx += ix/b.v.mass; b.vy += iy/b.v.mass;
+  a.speed*=0.8; b.speed*=0.8;              // scrub some forward drive on contact
+
+  Sfx.bump();
+  spawnParts((a.x+b.x)/2,(a.y+b.y)/2,'#fff',12,130,.4,6);
 }
 
 // =====================================================
 //  DRAW HELPERS
 // =====================================================
-// Two viewports for a given layout. 'lr' = side-by-side columns (tall),
-// 'tb' = stacked rows (wide). Each is a screen-space rectangle.
-function getViewports(layout) {
-  return layout === 'tb'
-    ? [{ x: 0, y: 0,   w: W,   h: H/2 }, { x: 0,   y: H/2, w: W,   h: H/2 }]
-    : [{ x: 0, y: 0,   w: W/2, h: H   }, { x: W/2, y: 0,   w: W/2, h: H   }];
-}
+// The single full-screen viewport both cars share.
+function fullViewport() { return { x: 0, y: 0, w: W, h: H }; }
 
 // Scale + center that makes the whole track fit inside a viewport. The smaller
 // of the two axis ratios wins so nothing spills outside (letterboxing the rest).
@@ -715,8 +711,20 @@ function drawTrack(ctx, track, vp, fit) {
     }
     ctx.restore();
 
-    // Nitro pads — drawn as a little cylindrical boost pump (nitrous bottle).
+    // Nitro pads — a little cylindrical boost pump (nitrous bottle). A consumed
+    // pad shows only a faint recharge ring until its cooldown expires.
     for(const nb of track.nitros){
+      if(!nb.active){
+        const left=Math.max(0,(nb.respawnAt - Date.now()/1000)/NITRO_RESPAWN); // 1 -> 0
+        ctx.save(); ctx.translate(nb.x,nb.y);
+        ctx.strokeStyle='rgba(0,255,200,0.18)'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.arc(0,0,14,0,Math.PI*2); ctx.stroke();
+        // shrinking arc = time remaining until it pops back
+        ctx.strokeStyle='rgba(0,255,200,0.5)'; ctx.lineWidth=3;
+        ctx.beginPath(); ctx.arc(0,0,14,-Math.PI/2,-Math.PI/2 + (1-left)*Math.PI*2); ctx.stroke();
+        ctx.restore();
+        continue;
+      }
       const pulse=0.65+0.35*Math.sin(t/180+nb.x*.01);
       ctx.save(); ctx.translate(nb.x,nb.y);
       // Pulsing pickup glow on the road
@@ -766,22 +774,15 @@ function drawTrack(ctx, track, vp, fit) {
       ctx.restore();
     }
 
-    // Obstacles
+    // Obstacles — oil slicks (cones removed)
     for(const ob of track.obs){
       ctx.save(); ctx.translate(ob.x,ob.y);
-      if(ob.t==='cone'){
-        ctx.fillStyle='#ff6600';
-        ctx.beginPath(); ctx.moveTo(-9,11); ctx.lineTo(9,11); ctx.lineTo(0,-14); ctx.closePath(); ctx.fill();
-        ctx.fillStyle='#fff'; ctx.fillRect(-9,4,18,4);
-        ctx.fillStyle='rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(0,12,9,3,0,0,Math.PI*2); ctx.fill();
-      } else {
-        const p2=0.35+0.2*Math.sin(t/500+ob.x);
-        ctx.fillStyle=`rgba(15,15,40,${p2})`;
-        ctx.beginPath(); ctx.ellipse(0,0,40,24,0,0,Math.PI*2); ctx.fill();
-        ctx.strokeStyle=`rgba(80,40,200,${p2+0.2})`; ctx.lineWidth=2; ctx.stroke();
-        ctx.fillStyle=`rgba(60,0,200,${p2*.6})`; ctx.font='10px sans-serif'; ctx.textAlign='center';
-        ctx.fillText('🛢',0,4);
-      }
+      const p2=0.35+0.2*Math.sin(t/500+ob.x);
+      ctx.fillStyle=`rgba(15,15,40,${p2})`;
+      ctx.beginPath(); ctx.ellipse(0,0,40,24,0,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle=`rgba(80,40,200,${p2+0.2})`; ctx.lineWidth=2; ctx.stroke();
+      ctx.fillStyle=`rgba(60,0,200,${p2*.6})`; ctx.font='10px sans-serif'; ctx.textAlign='center';
+      ctx.fillText('🛢',0,4);
       ctx.restore();
     }
 
@@ -922,91 +923,57 @@ function raceProgress(p, track) {
   return p.lap * track.pts.length + tn.idx;
 }
 
-function drawHUD(ctx, p, vp, track, leaderIdx) {
-  ctx.save(); ctx.translate(vp.x, vp.y);
-  const hw = vp.w, vh = vp.h;
-
-  // Top bar bg
-  ctx.fillStyle='rgba(0,0,0,0.55)';
-  ctx.fillRect(0,0,hw,76);
-
-  // Player label
+// Both players now share one full-screen view, so each gets a compact corner
+// panel instead of a full-width top bar: P1 top-left, P2 top-right.
+function drawHUD(ctx, p, side, track, leaderIdx) {
+  const PW = Math.min(290, W*0.44), PH = 92, M = 8;
+  const x = side==='left' ? M : W-PW-M, y = M;
   const pCol = p.idx===0 ? '#4ff' : '#f84';
-  ctx.fillStyle = pCol;
-  ctx.font='bold 14px Courier New';
-  ctx.textAlign='left';
-  ctx.fillText('P'+(p.idx+1)+'  '+p.v.label, 10, 22);
+  const isLeading = leaderIdx === p.idx && !p.done;
 
-  // Speed in mph
+  ctx.save(); ctx.translate(x, y);
+
+  // Panel background + a colored edge in the player's color.
+  ctx.fillStyle='rgba(0,0,0,0.55)';
+  ctx.beginPath(); ctx.roundRect(0,0,PW,PH,8); ctx.fill();
+  ctx.strokeStyle=isLeading?'#ffd700':'rgba(255,255,255,0.12)';
+  ctx.lineWidth=isLeading?2:1;
+  ctx.beginPath(); ctx.roundRect(0,0,PW,PH,8); ctx.stroke();
+
+  // Player label (+ crown when leading), lap/cp on the right.
+  ctx.textAlign='left'; ctx.fillStyle=pCol; ctx.font='bold 13px Courier New';
+  ctx.fillText((isLeading?'👑 ':'')+'P'+(p.idx+1)+'  '+p.v.label, 10, 19);
+  ctx.textAlign='right'; ctx.fillStyle='#bbb'; ctx.font='12px Courier New';
+  ctx.fillText(p.done ? '✅ DONE' : `LAP ${Math.min(p.lap+1,track.laps)}/${track.laps}`, PW-10, 19);
+  ctx.fillStyle='#777'; ctx.font='10px Courier New';
+  ctx.fillText(`CP ${p.cpdone.length}/${track.cps.length}`, PW-10, 33);
+
+  // Speed
   const mph = Math.abs(Math.round(p.speed * 0.621371));
-  ctx.fillStyle='#eee'; ctx.font='bold 28px Courier New';
-  ctx.fillText(mph+' mph', 10, 55);
-
-  // Lap / CP (right side)
-  ctx.textAlign='right'; ctx.fillStyle='#aaa'; ctx.font='13px Courier New';
-  const lapStr = p.done ? '✅ DONE!' : `LAP ${Math.min(p.lap+1,track.laps)}/${track.laps}`;
-  ctx.fillText(lapStr, hw-10, 22);
-  ctx.fillStyle='#666'; ctx.font='11px Courier New';
-  ctx.fillText(`CP ${p.cpdone.length}/${track.cps.length}`, hw-10, 38);
-
-  // ---- LEADER BADGE ----
-  const isLeading = leaderIdx === p.idx;
-  if (!p.done) {
-    const badgeX = hw/2, badgeY = 90;
-    if (isLeading) {
-      // Glowing LEADING badge
-      const grd = ctx.createRadialGradient(badgeX,badgeY,2,badgeX,badgeY,55);
-      grd.addColorStop(0,'rgba(255,220,0,0.22)');
-      grd.addColorStop(1,'rgba(255,220,0,0)');
-      ctx.fillStyle=grd; ctx.fillRect(badgeX-60,badgeY-20,120,28); // glow bg
-
-      ctx.fillStyle='rgba(0,0,0,0.55)';
-      ctx.beginPath(); ctx.roundRect(badgeX-58,badgeY-18,116,24,6); ctx.fill();
-      ctx.strokeStyle='#ffd700'; ctx.lineWidth=1.5;
-      ctx.beginPath(); ctx.roundRect(badgeX-58,badgeY-18,116,24,6); ctx.stroke();
-      ctx.fillStyle='#ffd700'; ctx.font='bold 13px Courier New'; ctx.textAlign='center';
-      ctx.fillText('👑  LEADING', badgeX, badgeY-1);
-    } else {
-      // BEHIND badge
-      ctx.fillStyle='rgba(0,0,0,0.45)';
-      ctx.beginPath(); ctx.roundRect(badgeX-52,badgeY-18,104,24,6); ctx.fill();
-      ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1;
-      ctx.beginPath(); ctx.roundRect(badgeX-52,badgeY-18,104,24,6); ctx.stroke();
-      ctx.fillStyle='#888'; ctx.font='bold 12px Courier New'; ctx.textAlign='center';
-      ctx.fillText('▼  BEHIND', badgeX, badgeY-1);
-    }
-  }
+  ctx.textAlign='left'; ctx.fillStyle='#eee'; ctx.font='bold 26px Courier New';
+  ctx.fillText(mph+' mph', 10, 50);
 
   // Nitro bar
-  ctx.textAlign='left'; ctx.fillStyle='#333';
-  ctx.fillRect(10,62,hw-20,8);
-  const nc = p.nitro>60?'#0cf':p.nitro>30?'#fa0':'#f40';
-  ctx.fillStyle=nc;
-  ctx.fillRect(10,62,(hw-20)*p.nitro/100,8);
-  ctx.fillStyle='#666'; ctx.font='9px Courier New';
+  ctx.fillStyle='#333'; ctx.fillRect(10,62,PW-20,8);
+  ctx.fillStyle = p.nitro>60?'#0cf':p.nitro>30?'#fa0':'#f40';
+  ctx.fillRect(10,62,(PW-20)*p.nitro/100,8);
+  ctx.fillStyle='#888'; ctx.font='9px Courier New'; ctx.textAlign='left';
   ctx.fillText('NITRO', 10, 61);
-  if(p.nitro>=99) { ctx.fillStyle='#0ff'; ctx.font='bold 9px Courier New'; ctx.textAlign='right'; ctx.fillText('FULL!', hw-12, 61); ctx.textAlign='left'; }
+  if(p.nitro>=99){ ctx.fillStyle='#0ff'; ctx.font='bold 9px Courier New'; ctx.textAlign='right'; ctx.fillText('FULL!', PW-10, 61); }
 
-  // Air time indicator
-  if(p.air){
-    ctx.fillStyle='rgba(255,255,0,0.88)'; ctx.font='bold 18px Courier New'; ctx.textAlign='center';
-    ctx.fillText('✈ AIR TIME!', hw/2, 115);
-  }
-  // Oil skid
-  if(p.oilT>0){
-    ctx.fillStyle='rgba(100,50,200,0.12)'; ctx.fillRect(0,0,hw,vh);
-    ctx.fillStyle='#a070ff'; ctx.font='bold 14px Courier New'; ctx.textAlign='center';
-    ctx.fillText('⚠ OIL SLICK', hw/2, vh-30);
-  }
-  // Off road
-  if(!p.onRoad){
-    ctx.fillStyle='rgba(200,80,0,0.1)'; ctx.fillRect(0,0,hw,vh);
-    ctx.fillStyle='#f80'; ctx.font='bold 13px Courier New'; ctx.textAlign='center';
-    ctx.fillText('OFF ROAD', hw/2, vh-12);
-  }
-  // Spin / crash flash
-  if(p.spin>0){
-    ctx.fillStyle='rgba(255,100,0,0.15)'; ctx.fillRect(0,0,hw,vh);
+  // Status chips — current car state, color-coded.
+  const chips=[];
+  if(p.air)     chips.push(['✈ AIR','#ff4']);
+  if(p.oilT>0)  chips.push(['⚠ OIL','#a070ff']);
+  if(p.spin>0)  chips.push(['CONTACT','#f80']);
+  if(!p.onRoad) chips.push(['OFF ROAD','#f80']);
+  let cx=10;
+  ctx.font='bold 10px Courier New'; ctx.textAlign='left';
+  for(const [txt,col] of chips){
+    const w=ctx.measureText(txt).width+12;
+    ctx.fillStyle='rgba(255,255,255,0.06)'; ctx.beginPath(); ctx.roundRect(cx,76,w,12,3); ctx.fill();
+    ctx.fillStyle=col; ctx.fillText(txt,cx+6,85);
+    cx+=w+5;
   }
 
   ctx.restore();
@@ -1068,6 +1035,7 @@ function launchLevel(){
   showOnly(null); $('results').classList.remove('show');
   phase='countdown'; resultShown=false;
   const track=TRACKS[lvl];
+  track.nitros.forEach(nb=>{ nb.active=true; nb.respawnAt=0; }); // fresh boosts each run
   players=[mkPlayer(p1vk||'car',0), mkPlayer(p2vk||'moto',1)];
   const off=55;
   players[0].x=track.startPos.x-off*Math.sin(track.startAngle);
@@ -1137,12 +1105,14 @@ function loop(ts){
 
   if(phase==='racing'||phase==='countdown'){
     const track=TRACKS[lvl];
-    const layout=track.layout;
-    const vps=getViewports(layout);
+    const vp=fullViewport();
+    const fit=fitFor(track, vp);
 
     if(phase==='racing' && !paused){
       tickParts(dt);
       players.forEach(p=>tickPlayer(p,track,dt));
+      resolveCarCollision(players[0], players[1]); // bounce the cars off each other
+      tickNitros(track);                           // re-arm spent boost pads
       // Compute who is leading
       const prog0 = raceProgress(players[0], track);
       const prog1 = raceProgress(players[1], track);
@@ -1150,41 +1120,18 @@ function loop(ts){
       if(!resultShown && players.some(p=>p.done)) showResults();
     }
 
-    // Render each split view — whole track fits, so no panning needed.
-    for(let pi=0;pi<2;pi++){
-      const p=players[pi], vp=vps[pi];
-      const fit=fitFor(track, vp);
-      drawTrack(ctx, track, vp, fit);
-      drawParticles(ctx, vp, fit);
-      // Draw other player in this view
-      drawVehicle(ctx, players[1-pi], vp, fit);
-      // Draw this player
-      drawVehicle(ctx, p, vp, fit);
-      drawHUD(ctx, p, vp, track, leaderIdx);
-    }
+    // Single shared view — whole track fits, both cars drawn into it.
+    drawTrack(ctx, track, vp, fit);
+    drawParticles(ctx, vp, fit);
+    drawVehicle(ctx, players[0], vp, fit);
+    drawVehicle(ctx, players[1], vp, fit);
+    drawHUD(ctx, players[0], 'left',  track, leaderIdx);
+    drawHUD(ctx, players[1], 'right', track, leaderIdx);
 
     // Pause dim overlay on canvas
     if(paused){
       ctx.fillStyle='rgba(0,0,0,0.45)';
       ctx.fillRect(0,0,W,H);
-    }
-
-    // Center divider — runs between the two viewports for the active layout.
-    if(layout==='tb'){
-      ctx.fillStyle='#000'; ctx.fillRect(0,H/2-2,W,4);
-      const grad=ctx.createLinearGradient(0,H/2-6,0,H/2+6);
-      grad.addColorStop(0,'rgba(100,100,100,0)');
-      grad.addColorStop(0.5,'rgba(150,150,150,0.8)');
-      grad.addColorStop(1,'rgba(100,100,100,0)');
-      ctx.fillStyle=grad; ctx.fillRect(0,H/2-6,W,12);
-    } else {
-      const hw=W/2;
-      ctx.fillStyle='#000'; ctx.fillRect(hw-2,0,4,H);
-      const grad=ctx.createLinearGradient(hw-6,0,hw+6,0);
-      grad.addColorStop(0,'rgba(100,100,100,0)');
-      grad.addColorStop(0.5,'rgba(150,150,150,0.8)');
-      grad.addColorStop(1,'rgba(100,100,100,0)');
-      ctx.fillStyle=grad; ctx.fillRect(hw-6,0,12,H);
     }
 
     // Bottom info bar
