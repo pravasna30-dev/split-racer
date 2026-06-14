@@ -36,12 +36,13 @@ kbd{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);bo
   box-shadow:0 0 0;}
 .btn.ghost:hover{background:rgba(255,255,255,0.09);}
 /* vehicle select */
-.vs-wrap{display:flex;gap:60px;align-items:flex-start;margin:20px 0;}
+.vs-wrap{display:flex;gap:28px;align-items:flex-start;margin:14px 0;flex-wrap:wrap;justify-content:center;max-width:96vw;}
 .vs-col{text-align:center;}
 .vs-col h2{font-size:0.85rem;letter-spacing:4px;margin-bottom:16px;}
-.vs-cards{display:flex;gap:14px;}
-.vs-card{width:170px;background:rgba(255,255,255,0.03);border:2px solid rgba(255,255,255,0.08);
-  border-radius:14px;padding:16px 12px;text-align:center;cursor:pointer;transition:all 0.18s;}
+.vs-cards{display:flex;gap:8px;}
+.vs-card{width:124px;background:rgba(255,255,255,0.03);border:2px solid rgba(255,255,255,0.08);
+  border-radius:14px;padding:12px 8px;text-align:center;cursor:pointer;transition:all 0.18s;}
+.btn.ghost.sel{border-color:#ff4;color:#ff4;background:rgba(255,220,0,0.08);}
 .vs-card:hover{border-color:rgba(255,200,0,0.4);background:rgba(255,200,0,0.04);transform:translateY(-3px);}
 .vs-card.sel{border-color:#ff4;background:rgba(255,220,0,0.08);box-shadow:0 0 20px rgba(255,200,0,0.25);transform:translateY(-4px);}
 .vs-card .ico{font-size:2.8rem;display:block;margin-bottom:6px;}
@@ -88,26 +89,33 @@ kbd{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);bo
   <!-- TITLE -->
   <div class="screen active" id="scTitle">
     <h1>SPLIT RACER</h1>
-    <div class="tagline">2 PLAYER LOCAL RACING</div>
+    <div class="tagline">2–4 PLAYER LOCAL RACING</div>
     <div class="subtitle">10 TRACKS · NITRO BOOST · AIR-TIME &amp; CLEAN-STREAK REWARDS · CONTACT</div>
     <div class="controls-hint">
       <div class="ctrl-box">
-        <h3 class="p1h">PLAYER 1  (LEFT)</h3>
-        <p><kbd>W</kbd> Accelerate &nbsp; <kbd>S</kbd> Brake<br>
-           <kbd>A</kbd> / <kbd>D</kbd> Steer<br>
-           <kbd>SHIFT</kbd> Nitro Boost</p>
+        <h3 style="color:#4ff;">PLAYER 1</h3>
+        <p><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Drive<br>
+           <kbd>SPACE</kbd> Nitro</p>
       </div>
       <div class="ctrl-box">
-        <h3 class="p2h">PLAYER 2  (RIGHT)</h3>
-        <p><kbd>↑</kbd> Accelerate &nbsp; <kbd>↓</kbd> Brake<br>
-           <kbd>←</kbd> / <kbd>→</kbd> Steer<br>
-           <kbd>ENTER</kbd> Nitro Boost</p>
+        <h3 style="color:#f84;">PLAYER 2</h3>
+        <p><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> Drive<br>
+           <kbd>ENTER</kbd> Nitro</p>
       </div>
       <div class="ctrl-box">
-        <h3 style="color:#aaa;">GAME CONTROLS</h3>
-        <p><kbd>P</kbd> Pause / Resume<br>
-           <kbd>Q</kbd> Quit to Menu<br>
-           <kbd>M</kbd> Mute / Unmute</p>
+        <h3 style="color:#7f7;">PLAYER 3</h3>
+        <p><kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd> Drive<br>
+           <kbd>U</kbd> Nitro</p>
+      </div>
+      <div class="ctrl-box">
+        <h3 style="color:#fd4;">PLAYER 4</h3>
+        <p><kbd>T</kbd><kbd>F</kbd><kbd>G</kbd><kbd>H</kbd> or Numpad<br>
+           <kbd>R</kbd> / <kbd>0</kbd> Nitro</p>
+      </div>
+      <div class="ctrl-box">
+        <h3 style="color:#aaa;">GAME</h3>
+        <p><kbd>P</kbd> Pause &nbsp; <kbd>Q</kbd> Quit<br>
+           <kbd>M</kbd> Mute</p>
       </div>
     </div>
     <button class="btn" onclick="gotoVS()">SELECT VEHICLES ▶</button>
@@ -116,11 +124,12 @@ kbd{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);bo
   <!-- VEHICLE SELECT -->
   <div class="screen" id="scVS">
     <div style="color:#ff4;font-size:1.4rem;letter-spacing:5px;margin-bottom:4px;">CHOOSE YOUR RIDE</div>
-    <div style="color:#555;font-size:0.75rem;letter-spacing:2px;margin-bottom:24px;">Click to select · Each player picks their own</div>
-    <div class="vs-wrap">
-      <div class="vs-col"><h2 class="p1h">PLAYER 1</h2><div class="vs-cards" id="p1c"></div></div>
-      <div class="vs-col"><h2 class="p2h">PLAYER 2</h2><div class="vs-cards" id="p2c"></div></div>
+    <div style="color:#555;font-size:0.75rem;letter-spacing:2px;margin-bottom:14px;">Click to select · Each player picks their own</div>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:18px;">
+      <span style="color:#777;font-size:0.7rem;letter-spacing:2px;">PLAYERS:</span>
+      <div id="vsCount" style="display:flex;gap:8px;"></div>
     </div>
+    <div class="vs-wrap" id="vsCols"></div>
     <div style="display:flex;gap:16px;margin-top:10px;">
       <button class="btn ghost" onclick="gotoTitle()">← BACK</button>
       <button class="btn" id="goRace" onclick="beginRace()" disabled>RACE! 🏁</button>
@@ -155,7 +164,7 @@ kbd{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);bo
 // =====================================================
 // Bump this on every meaningful change. Major = big gameplay/visual overhaul,
 // minor = new feature, patch = tweak/fix. Shown bottom-right + on the title.
-const VERSION = '3.1.0';
+const VERSION = '4.0.0';
 const canvas = document.getElementById('c');
 const ctx    = canvas.getContext('2d');
 let W = 0, H = 0;
@@ -449,6 +458,7 @@ function mkPlayer(vk, idx) {
     lap:0, cpdone:[], lapStart:0, lapTimes:[], done:false,
     spin:0, oilT:0,
     streak:0, streakMile:0, streakMsg:'', streakMsgT:0,
+    nitroReady:false, // must release nitro once before it can fire (anti-stuck-key)
     idx
   };
 }
@@ -477,6 +487,7 @@ function quitToMenu() {
 
 addEventListener('keydown', e => {
   K[e.code] = true;
+  // Stop keys that would scroll the page or re-trigger a focused button.
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
   if (e.code === 'KeyP') togglePause();
   if (e.code === 'KeyQ') quitToMenu();
@@ -484,10 +495,23 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup', e => { K[e.code] = false; });
 
+// Up to 4 players, each with a distinct cluster. Every action lists ALL the
+// codes that trigger it, so P4 accepts both TFGH and the numpad. NOTE: no
+// nitro is a modifier key (Shift/Ctrl) — modifiers can read as "held" the
+// instant the canvas focuses (and OS Sticky Keys makes it worse), which is what
+// made P1 phantom-boost at the start. Plain keys + the release-latch in
+// tickPlayer (nitroReady) kill that bug for everyone.
+const KEYMAPS = [
+  { acc:['KeyW'],          brk:['KeyS'],          lt:['KeyA'],          rt:['KeyD'],          nit:['Space'],            label:'W A S D + SPACE' },
+  { acc:['ArrowUp'],       brk:['ArrowDown'],     lt:['ArrowLeft'],     rt:['ArrowRight'],    nit:['Enter','NumpadEnter'], label:'ARROWS + ENTER' },
+  { acc:['KeyI'],          brk:['KeyK'],          lt:['KeyJ'],          rt:['KeyL'],          nit:['KeyU'],             label:'I J K L + U' },
+  { acc:['KeyT','Numpad8'],brk:['KeyG','Numpad5'],lt:['KeyF','Numpad4'],rt:['KeyH','Numpad6'],nit:['KeyR','Numpad0'],   label:'T F G H / NUMPAD + R / 0' },
+];
+const PCOLORS = ['#4ff','#f84','#7f7','#fd4']; // per-player accent colors
+const anyDown = codes => codes.some(c => K[c]);
 function getInp(idx) {
-  return idx===0
-    ? {acc:K.KeyW, brk:K.KeyS, lt:K.KeyA, rt:K.KeyD, nit:K.ShiftLeft||K.ShiftRight}
-    : {acc:K.ArrowUp, brk:K.ArrowDown, lt:K.ArrowLeft, rt:K.ArrowRight, nit:K.Enter||K.NumpadEnter};
+  const m = KEYMAPS[idx];
+  return { acc:anyDown(m.acc), brk:anyDown(m.brk), lt:anyDown(m.lt), rt:anyDown(m.rt), nit:anyDown(m.nit) };
 }
 
 // =====================================================
@@ -511,9 +535,10 @@ function tickPlayer(p, track, dt) {
     spawnParts(p.x,p.y,'#0f8',14,120,.6,8);
   }
 
-  // Nitro
-  if(inp.nit && p.nitro>0 && !p.nitroOn){ p.nitroOn=true; Sfx.nitro(); }
-  if(!inp.nit) p.nitroOn=false;
+  // Nitro — the release-latch (nitroReady) means a nitro key already held at the
+  // GO is ignored until the player lets go once, so nobody starts boosting.
+  if(!inp.nit){ p.nitroOn=false; p.nitroReady=true; }
+  if(inp.nit && p.nitroReady && p.nitro>0 && !p.nitroOn){ p.nitroOn=true; Sfx.nitro(); }
   const nm = (p.nitroOn && p.nitro>0) ? v.nitroMult : 1;
   if(p.nitroOn && p.nitro>0){
     p.nitro=Math.max(0, p.nitro-38*dt);
@@ -948,22 +973,26 @@ function raceProgress(p, track) {
   return p.lap * track.pts.length + tn.idx;
 }
 
-// Both players now share one full-screen view, so each gets a compact corner
-// panel instead of a full-width top bar: P1 top-left, P2 top-right.
-function drawHUD(ctx, p, side, track, leaderIdx) {
-  const PW = Math.min(290, W*0.44), PH = 92, M = 8;
-  const x = side==='left' ? M : W-PW-M, y = M;
-  const pCol = p.idx===0 ? '#4ff' : '#f84';
+// All players share one full-screen view, so each gets a compact panel in a
+// screen corner, in player order: P1 tl, P2 tr, P3 bl, P4 br.
+function drawHUD(ctx, p, corner, track, leaderIdx) {
+  const PW = Math.min(290, W*0.42), PH = 92, M = 8, infoBar = 24;
+  const right  = corner==='tr' || corner==='br';
+  const bottom = corner==='bl' || corner==='br';
+  const x = right  ? W-PW-M : M;
+  const y = bottom ? H-PH-M-infoBar : M;
+  const pCol = PCOLORS[p.idx];
   const isLeading = leaderIdx === p.idx && !p.done;
 
   ctx.save(); ctx.translate(x, y);
 
-  // Panel background + a colored edge in the player's color.
+  // Panel background + a colored edge in the player's color (gold if leading).
   ctx.fillStyle='rgba(0,0,0,0.55)';
   ctx.beginPath(); ctx.roundRect(0,0,PW,PH,8); ctx.fill();
-  ctx.strokeStyle=isLeading?'#ffd700':'rgba(255,255,255,0.12)';
-  ctx.lineWidth=isLeading?2:1;
+  ctx.strokeStyle=isLeading?'#ffd700':pCol;
+  ctx.lineWidth=isLeading?2:1; ctx.globalAlpha=isLeading?1:0.5;
   ctx.beginPath(); ctx.roundRect(0,0,PW,PH,8); ctx.stroke();
+  ctx.globalAlpha=1;
 
   // Player label (+ crown when leading), lap/cp on the right.
   ctx.textAlign='left'; ctx.fillStyle=pCol; ctx.font='bold 13px Courier New';
@@ -988,6 +1017,7 @@ function drawHUD(ctx, p, side, track, leaderIdx) {
 
   // Status chips — current car state, color-coded.
   const chips=[];
+  if(p.streak>=STREAK_STEP) chips.push(['🔥 x'+(Math.floor(p.streak/STREAK_STEP)+1),'#0f8']);
   if(p.air)     chips.push(['✈ AIR','#ff4']);
   if(p.oilT>0)  chips.push(['⚠ OIL','#a070ff']);
   if(p.spin>0)  chips.push(['CONTACT','#f80']);
@@ -1002,6 +1032,18 @@ function drawHUD(ctx, p, side, track, leaderIdx) {
   }
 
   ctx.restore();
+
+  // Clean-streak milestone popup — floats just off the panel, fading out.
+  if(p.streakMsgT>0){
+    const a=Math.min(1,p.streakMsgT/1.3);
+    const px=x+PW/2, py=bottom ? y-14 : y+PH+22;
+    ctx.save();
+    ctx.globalAlpha=a; ctx.textAlign='center';
+    ctx.font='bold 22px Courier New'; ctx.fillStyle='#0f8';
+    ctx.shadowColor='#0f8'; ctx.shadowBlur=16;
+    ctx.fillText(p.streakMsg, px, py);
+    ctx.restore();
+  }
 }
 
 // =====================================================
@@ -1009,7 +1051,9 @@ function drawHUD(ctx, p, side, track, leaderIdx) {
 // =====================================================
 let phase = 'title'; // title | vs | countdown | racing | results
 let lvl = 0;
-let players = [], p1vk = null, p2vk = null;
+let players = [];
+let numPlayers = 2;                       // 2–4, chosen on the vehicle screen
+let playerVks = [null,null,null,null];    // each player's picked vehicle key
 let lastT = 0, resultShown = false;
 let leaderIdx = 0; // which player index is currently leading
 
@@ -1024,12 +1068,49 @@ function gotoTitle(){ phase='title'; showOnly('scTitle'); Sfx.stopMusic(); }
 function gotoVS(){
   Sfx.init();
   phase='vs'; showOnly('scVS');
-  p1vk=null; p2vk=null; $('goRace').disabled=true;
-  buildCards('p1c',0); buildCards('p2c',1);
+  playerVks=[null,null,null,null];
+  buildCountChooser();
+  buildPlayerCols();
 }
 
-function buildCards(containerId, pIdx){
-  const el=$(containerId); el.innerHTML='';
+// 2 / 3 / 4-player chooser. Changing the count rebuilds the pick columns.
+function buildCountChooser(){
+  const el=$('vsCount'); el.innerHTML='';
+  [2,3,4].forEach(n=>{
+    const b=document.createElement('button');
+    b.className='btn ghost'+(n===numPlayers?' sel':'');
+    b.style.padding='8px 20px'; b.textContent=n+'P';
+    b.onclick=()=>{ numPlayers=n; playerVks=[null,null,null,null]; buildCountChooser(); buildPlayerCols(); };
+    el.appendChild(b);
+  });
+}
+
+// One vehicle-pick column per active player, labelled in that player's color
+// with its control hint underneath.
+function buildPlayerCols(){
+  const wrap=$('vsCols'); wrap.innerHTML='';
+  for(let i=0;i<numPlayers;i++){
+    const col=document.createElement('div'); col.className='vs-col';
+    const h=document.createElement('h2'); h.style.color=PCOLORS[i];
+    h.textContent='PLAYER '+(i+1);
+    const hint=document.createElement('div');
+    hint.style.cssText='color:#666;font-size:0.58rem;letter-spacing:1px;margin:-10px 0 12px;';
+    hint.textContent=KEYMAPS[i].label;
+    const cards=document.createElement('div'); cards.className='vs-cards';
+    col.appendChild(h); col.appendChild(hint); col.appendChild(cards);
+    wrap.appendChild(col);
+    buildCards(cards, i);
+  }
+  updateRaceBtn();
+}
+
+function updateRaceBtn(){
+  const ready = playerVks.slice(0,numPlayers).every(Boolean);
+  $('goRace').disabled = !ready;
+}
+
+function buildCards(el, pIdx){
+  el.innerHTML='';
   Object.entries(VDEFS).forEach(([key,v])=>{
     const card=document.createElement('div');
     card.className='vs-card';
@@ -1045,8 +1126,8 @@ function buildCards(containerId, pIdx){
     card.onclick=()=>{
       el.querySelectorAll('.vs-card').forEach(c=>c.classList.remove('sel'));
       card.classList.add('sel');
-      if(pIdx===0) p1vk=key; else p2vk=key;
-      $('goRace').disabled=!(p1vk&&p2vk);
+      playerVks[pIdx]=key;
+      updateRaceBtn();
     };
     el.appendChild(card);
   });
@@ -1057,17 +1138,26 @@ function beginRace(){ lvl=0; launchLevel(); }
 function launchLevel(){
   paused = false;
   document.getElementById('pauseOverlay').classList.remove('show');
+  if(document.activeElement && document.activeElement.blur) document.activeElement.blur(); // so Space (P1 nitro) won't re-click a button
   showOnly(null); $('results').classList.remove('show');
   phase='countdown'; resultShown=false;
   const track=TRACKS[lvl];
   track.nitros.forEach(nb=>{ nb.active=true; nb.respawnAt=0; }); // fresh boosts each run
-  players=[mkPlayer(p1vk||'car',0), mkPlayer(p2vk||'moto',1)];
-  const off=55;
-  players[0].x=track.startPos.x-off*Math.sin(track.startAngle);
-  players[0].y=track.startPos.y+off*Math.cos(track.startAngle);
-  players[1].x=track.startPos.x+off*Math.sin(track.startAngle);
-  players[1].y=track.startPos.y-off*Math.cos(track.startAngle);
-  players.forEach(p=>{ p.angle=track.startAngle; p.lapStart=performance.now()/1000; });
+
+  // Build the grid: cars line up across the road on the start line. perp is the
+  // direction perpendicular to travel; staggered rows keep them from overlapping.
+  const a=track.startAngle, perpX=-Math.sin(a), perpY=Math.cos(a);
+  const fallback=['car','moto','rick','car'];
+  const spacing=Math.min(46, (track.tw*1.6)/Math.max(1,numPlayers));
+  players=[];
+  for(let i=0;i<numPlayers;i++){
+    const p=mkPlayer(playerVks[i]||fallback[i], i);
+    const off=(i-(numPlayers-1)/2)*spacing, back=(i%2)*20;
+    p.x=track.startPos.x + perpX*off - Math.cos(a)*back;
+    p.y=track.startPos.y + perpY*off - Math.sin(a)*back;
+    p.angle=a; p.lapStart=performance.now()/1000;
+    players.push(p);
+  }
   doCountdown();
 }
 
@@ -1096,22 +1186,24 @@ function showResults(){
   resultShown=true;
   Sfx.stopMusic(); Sfx.win();
   const track=TRACKS[lvl];
-  // find winner: whoever has more laps, or further along
+  // Rank all players by progress (finished cars sort to the front by lap count).
   const prog=p=>p.lap+trackNearest(track,p.x,p.y).idx/track.pts.length*.001;
-  const winner=prog(players[0])>=prog(players[1])?players[0]:players[1];
-  if(players.some(p=>p.done)) {
-    const doneFirst=players.find(p=>p.done)||winner;
+  const ranked=[...players].sort((a,b)=>prog(b)-prog(a));
+  const winner=ranked[0];
+  if(players.some(p=>p.done)){
     $('resTitle').textContent=lvl>=TRACKS.length-1?'🏆 ALL TRACKS DONE!':'RACE COMPLETE!';
-    $('resWinner').innerHTML=`<span style="color:${doneFirst.idx===0?'#4ff':'#f84'}">PLAYER ${doneFirst.idx+1} WINS!</span> 🎉`;
+    $('resWinner').innerHTML=`<span style="color:${PCOLORS[winner.idx]}">PLAYER ${winner.idx+1} WINS!</span> 🎉`;
   } else {
     $('resTitle').textContent='RACE OVER';
-    $('resWinner').innerHTML=`<span style="color:${winner.idx===0?'#4ff':'#f84'}">PLAYER ${winner.idx+1} LEADS!</span>`;
+    $('resWinner').innerHTML=`<span style="color:${PCOLORS[winner.idx]}">PLAYER ${winner.idx+1} LEADS!</span>`;
   }
-  $('resTimes').innerHTML=players.map(p=>{
+  // Standings in finishing order, with a place medal.
+  const medal=['🥇','🥈','🥉','4️⃣'];
+  $('resTimes').innerHTML=ranked.map((p,place)=>{
     const tot=p.lapTimes.reduce((a,b)=>a+b,0);
     const best=p.lapTimes.length?Math.min(...p.lapTimes):null;
     return `<div class="res-t">
-      <h4 style="color:${p.idx===0?'#4ff':'#f84'}">PLAYER ${p.idx+1}</h4>
+      <h4 style="color:${PCOLORS[p.idx]}">${medal[place]} PLAYER ${p.idx+1}</h4>
       <span>${tot>0?tot.toFixed(2)+'s':'—'}</span>
       ${best?`<small>Best: ${best.toFixed(2)}s</small>`:''}
     </div>`;
@@ -1136,22 +1228,24 @@ function loop(ts){
     if(phase==='racing' && !paused){
       tickParts(dt);
       players.forEach(p=>tickPlayer(p,track,dt));
-      resolveCarCollision(players[0], players[1]); // bounce the cars off each other
+      // Bounce every pair of cars off each other.
+      for(let i=0;i<players.length;i++)
+        for(let j=i+1;j<players.length;j++)
+          resolveCarCollision(players[i], players[j]);
       tickNitros(track);                           // re-arm spent boost pads
-      // Compute who is leading
-      const prog0 = raceProgress(players[0], track);
-      const prog1 = raceProgress(players[1], track);
-      leaderIdx = prog0 >= prog1 ? 0 : 1;
+      // Leader = furthest along (most progress) among all players.
+      let best=-Infinity;
+      players.forEach(p=>{ const pr=raceProgress(p,track); if(pr>best){best=pr; leaderIdx=p.idx;} });
       if(!resultShown && players.some(p=>p.done)) showResults();
     }
 
-    // Single shared view — whole track fits, both cars drawn into it.
+    // Single shared view — whole track fits, all cars drawn into it.
     drawTrack(ctx, track, vp, fit);
     drawParticles(ctx, vp, fit);
-    drawVehicle(ctx, players[0], vp, fit);
-    drawVehicle(ctx, players[1], vp, fit);
-    drawHUD(ctx, players[0], 'left',  track, leaderIdx);
-    drawHUD(ctx, players[1], 'right', track, leaderIdx);
+    players.forEach(p=>drawVehicle(ctx, p, vp, fit));
+    // HUD panels go to the screen corners, in player order.
+    const CORNERS=['tl','tr','bl','br'];
+    players.forEach(p=>drawHUD(ctx, p, CORNERS[p.idx], track, leaderIdx));
 
     // Pause dim overlay on canvas
     if(paused){
