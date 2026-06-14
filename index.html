@@ -89,7 +89,7 @@ kbd{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);bo
   <div class="screen active" id="scTitle">
     <h1>SPLIT RACER</h1>
     <div class="tagline">2 PLAYER LOCAL RACING</div>
-    <div class="subtitle">10 TRACKS · NITRO BOOST · RAMPS · CAR-TO-CAR CONTACT</div>
+    <div class="subtitle">10 TRACKS · NITRO BOOST · AIR-TIME &amp; CLEAN-STREAK REWARDS · CONTACT</div>
     <div class="controls-hint">
       <div class="ctrl-box">
         <h3 class="p1h">PLAYER 1  (LEFT)</h3>
@@ -155,7 +155,7 @@ kbd{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);bo
 // =====================================================
 // Bump this on every meaningful change. Major = big gameplay/visual overhaul,
 // minor = new feature, patch = tweak/fix. Shown bottom-right + on the title.
-const VERSION = '3.0.0';
+const VERSION = '3.1.0';
 const canvas = document.getElementById('c');
 const ctx    = canvas.getContext('2d');
 let W = 0, H = 0;
@@ -209,6 +209,7 @@ const Sfx = {
   go()         { this.play({f0:1047,type:'square',vol:.4,dur:.4}); },
   win()        { [0,.18,.36,.54].forEach((d,i) => setTimeout(()=>this.play({f0:[523,659,784,1047][i],type:'sine',vol:.2,dur:.22}), d*1000)); },
   nitroPickup(){ this.play({f0:600,f1:1200,type:'sine',vol:.15,dur:.2}); },
+  streak(lvl)  { const base=523+ (lvl||0)*60; [0,.08,.16].forEach((d,i)=>setTimeout(()=>this.play({f0:base*[1,1.26,1.5][i],type:'triangle',vol:.13,dur:.16}),d*1000)); },
   // ---- music ----
   _mbeat: 0, _mpending: false,
   startMusic() { if (!this.ac || this.muted || this._mpending) return; this._mpending = true; this._mbeat = 0; this._nextBeat(); },
@@ -447,6 +448,7 @@ function mkPlayer(vk, idx) {
     onRoad:true,
     lap:0, cpdone:[], lapStart:0, lapTimes:[], done:false,
     spin:0, oilT:0,
+    streak:0, streakMile:0, streakMsg:'', streakMsgT:0,
     idx
   };
 }
@@ -495,6 +497,20 @@ function tickPlayer(p, track, dt) {
   if(p.done) return;
   const v=p.v, inp=getInp(p.idx);
 
+  // Clean-driving streak — climbs every hit-free second. It both speeds up
+  // nitro regen (below) and pays out a chunk at each STREAK_STEP milestone.
+  // A wall crash or car bump zeroes it (see Wall push / resolveCarCollision).
+  p.streak += dt;
+  if(p.streakMsgT>0) p.streakMsgT -= dt;
+  const mile = Math.floor(p.streak / STREAK_STEP);
+  if(mile > p.streakMile){
+    p.streakMile = mile;
+    p.nitro = Math.min(100, p.nitro + STREAK_BONUS);
+    p.streakMsg = 'CLEAN x'+(mile+1); p.streakMsgT = 1.3;
+    Sfx.streak(mile);
+    spawnParts(p.x,p.y,'#0f8',14,120,.6,8);
+  }
+
   // Nitro
   if(inp.nit && p.nitro>0 && !p.nitroOn){ p.nitroOn=true; Sfx.nitro(); }
   if(!inp.nit) p.nitroOn=false;
@@ -505,7 +521,9 @@ function tickPlayer(p, track, dt) {
     if(Math.random()<.6) spawnParts(bx,by,'#00cfff',2,90,.28,6);
     if(Math.random()<.4) spawnParts(bx,by,'#8040ff',2,70,.2,4);
   } else {
-    p.nitro=Math.min(100, p.nitro+v.nitroRegen*dt);
+    // Longer clean streak -> faster refill (up to +150% at ~9s).
+    const streakMult = 1 + Math.min(p.streak/6, 1.5);
+    p.nitro=Math.min(100, p.nitro + v.nitroRegen*streakMult*dt);
   }
 
   // Steer
@@ -537,9 +555,11 @@ function tickPlayer(p, track, dt) {
   const kdamp = Math.max(0, 1 - 6*dt); // frame-rate independent decay (~0.9 @60fps)
   p.vx *= kdamp; p.vy *= kdamp;
 
-  // Jump / air
+  // Jump / air — airborne time rewards nitro (a clean stunt jump tops you up).
   if(p.air){
     p.z += p.vz*dt; p.vz -= 650*dt;
+    p.nitro = Math.min(100, p.nitro + AIR_NITRO_RATE*dt);
+    if(Math.random()<.3) spawnParts(p.x,p.y-p.z*0.45,'#0fc',1,40,.4,4);
     if(p.z<=0){ p.z=0; p.air=false; Sfx.land(); spawnParts(p.x,p.y,'#ccc',10,70,.4,5); }
   }
 
@@ -549,7 +569,7 @@ function tickPlayer(p, track, dt) {
     const cp=track.pts[tn2.idx];
     const dx=cp.x-p.x, dy=cp.y-p.y, d=Math.hypot(dx,dy)||1;
     p.x+=dx/d*6; p.y+=dy/d*6;
-    if(Math.abs(p.speed)>40){ Sfx.crash(); p.speed*=0.35; spawnParts(p.x,p.y,'#f80',8,100,.5,7); }
+    if(Math.abs(p.speed)>40){ Sfx.crash(); p.speed*=0.35; p.streak=0; p.streakMile=0; spawnParts(p.x,p.y,'#f80',8,100,.5,7); }
     else p.speed*=0.7;
   }
 
@@ -599,7 +619,10 @@ function tickPlayer(p, track, dt) {
   }
 }
 
-const NITRO_RESPAWN = 5; // seconds a nitro pad stays gone after being grabbed
+const NITRO_RESPAWN = 5;   // seconds a nitro pad stays gone after being grabbed
+const AIR_NITRO_RATE = 26; // nitro/sec gained while airborne off a ramp
+const STREAK_STEP    = 4;  // seconds of clean driving per streak milestone
+const STREAK_BONUS   = 18; // nitro awarded at each milestone
 
 // Re-arm any nitro pad whose cooldown has elapsed (with a little pop of sparks).
 function tickNitros(track){
@@ -640,6 +663,8 @@ function resolveCarCollision(a, b){
   a.vx -= ix/a.v.mass; a.vy -= iy/a.v.mass;
   b.vx += ix/b.v.mass; b.vy += iy/b.v.mass;
   a.speed*=0.8; b.speed*=0.8;              // scrub some forward drive on contact
+  a.streak=0; a.streakMile=0;              // a bump breaks both drivers' streaks
+  b.streak=0; b.streakMile=0;
 
   Sfx.bump();
   spawnParts((a.x+b.x)/2,(a.y+b.y)/2,'#fff',12,130,.4,6);
